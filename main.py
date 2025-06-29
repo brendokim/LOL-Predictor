@@ -3,5 +3,4 @@ from sklearn.neighbors import KNeighborsClassifier #change based on what model y
 from sklearn.metrics import accuracy_score
 
 if __name__ == "__main__":
-    #use functions from data_processing here
     pass
