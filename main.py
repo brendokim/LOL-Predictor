@@ -3,4 +3,9 @@ from sklearn.neighbors import KNeighborsClassifier #change based on what model y
 from sklearn.metrics import accuracy_score
 
 if __name__ == "__main__":
+
+    df = load_data(r"C:\Users\Admin\Downloads\archive\match_data_v5.csv")
+
+    print(df)
+
     pass

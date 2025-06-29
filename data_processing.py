@@ -12,6 +12,7 @@ def load_data(path):
 
     return df
 def clean_data(df):
+    
     pass
 
 def get_features_and_labels(df):
