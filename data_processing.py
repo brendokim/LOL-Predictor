@@ -18,6 +18,16 @@ def clean_data(df):
 
 def get_features_and_labels(df, features=None):
     target_col = 'blueWin'
+
+    df = df.copy()
+    
+    df['goldDifference'] = df['blueTeamTotalGold'] - df['redTeamTotalGold']
+    df['killDifference'] = df['blueTeamTotalKills'] - df['redTeamTotalKills']
+    df['towerDifference'] = df['blueTeamTowersDestroyed'] - df['redTeamTowersDestroyed']
+    df['xpDifference'] = df['blueTeamXp'] - df['redTeamXp']
+    df['dragonDifference'] = df['blueTeamDragonKills'] - df['redTeamDragonKills']
+    df['wardDifference'] = df['blueTeamWardsPlaced'] - df['redTeamWardsPlaced']
+
     if features is None:
         features = [col for col in df.columns if col != target_col]
     
@@ -55,46 +65,55 @@ def split_data(path, features=None, test_size=0.2):
 
     return X_test, y_test, X_train, y_train
 
-def lin_reg(x, th, th0):
-    return np.dot(th.T, x) + th0
+def logistic_loss(x, y, th, th0):
+    predictions = logistic_predict(x, th, th0)
+    epsilon = 1e-15
+    predictions = np.clip(predictions, epsilon, 1 - epsilon)
+    return -(y * np.log(predictions) + (1 - y) * np.log(1 - predictions))
 
-def square_loss(x, y, th, th0):
-    return (y - lin_reg(x, th, th0)) ** 2
+def d_logistic_loss_th(x, y, th, th0):
+    predictions = logistic_predict(x, th, th0)
+    return -(y - predictions) * x
 
-def mean_square_loss(x, y, th, th0):
-    return np.mean(square_loss(x, y, th, th0), axis = 1, keepdims = True)
+def d_mean_logistic_loss_th(x, y, th, th0):
+    return np.mean(d_logistic_loss_th(x, y, th, th0), axis=1, keepdims=True)
 
-def ridge_obj(x, y, th, th0, lam):
-    return np.mean(square_loss(x, y, th, th0), axis = 1, keepdims = True) + lam * np.linalg.norm(th) ** 2
+def d_logistic_loss_th0(x, y, th, th0):
+    predictions = logistic_predict(x, th, th0)
+    return -(y - predictions)
 
-def d_lin_reg_th(x, th, th0):
-    return x
+def d_mean_logistic_loss_th0(x, y, th, th0):
+    return np.mean(d_logistic_loss_th0(x, y, th, th0), axis=1, keepdims=True)
 
-def d_square_loss_th(x, y, th, th0):
-    return (-2 * (y - lin_reg(x, th, th0)) * d_lin_reg_th(x, th, th0))
+def d_logistic_obj_th(x, y, th, th0, lam):
+    return d_mean_logistic_loss_th(x, y, th, th0) + 2 * lam * th
 
-def d_mean_square_loss_th(x, y, th, th0):
-    return np.mean(d_square_loss_th(x, y, th, th0), axis = 1, keepdims = True)
+def d_logistic_obj_th0(x, y, th, th0, lam):
+    return d_mean_logistic_loss_th0(x, y, th, th0)
 
-def d_lin_reg_th0(x, th, th0):
-    return np.ones((1, x.shape[1]))
-
-def d_square_loss_th0(x, y, th, th0):
-    return (-2 * (y - lin_reg(x, th, th0)) * d_lin_reg_th0(x, th, th0))
-
-def d_mean_square_loss_th0(x, y, th, th0):
-    return np.mean(d_square_loss_th0(x, y, th, th0), axis = 1, keepdims = True)
-
-def d_ridge_obj_th(x, y, th, th0, lam):
-    return d_mean_square_loss_th(x, y, th, th0) + 2 * lam * th
-
-def d_ridge_obj_th0(x, y, th, th0, lam):
-    return d_mean_square_loss_th0(x, y, th, th0)
-
-def ridge_obj_grad(x, y, th, th0, lam):
-    grad_th = d_ridge_obj_th(x, y, th, th0, lam)
-    grad_th0 = d_ridge_obj_th0(x, y, th, th0, lam)
+def logistic_obj_grad(x, y, th, th0, lam):
+    grad_th = d_logistic_obj_th(x, y, th, th0, lam)
+    grad_th0 = d_logistic_obj_th0(x, y, th, th0, lam)
     return np.vstack([grad_th, grad_th0])
+
+def sigmoid(z):
+    z = np.clip(z, -500, 500)
+    return 1 / (1 + np.exp(-z))
+
+def logistic_predict(x, th, th0):
+    return sigmoid(np.dot(th.T, x) + th0)
+
+def logistic_loss(x, y, th, th0):
+    predictions = logistic_predict(x, th, th0)
+    epsilon = 1e-15
+    predictions = np.clip(predictions, epsilon, 1 - epsilon)
+    return -(y * np.log(predictions) + (1 - y) * np.log(1 - predictions))
+
+def mean_logistic_loss(x, y, th, th0):
+    return np.mean(logistic_loss(x, y, th, th0), axis=1, keepdims = True)
+
+def logistic_obj(x, y, th, th0, lam):
+    return mean_logistic_loss(x, y, th, th0) + lam * np.linalg.norm(th) ** 2
 
 def sgd(X, y, J, dJ, w0, step_size_fn, max_iter):
     w = w0.copy()
@@ -117,7 +136,7 @@ def sgd(X, y, J, dJ, w0, step_size_fn, max_iter):
     
     return w, fs, ws
 
-def ridge_min(X, y, lam):
+def logistic_min(X, y, lam):
     def svm_min_step_size_fn(i):
         return 0.01/(i+1)**0.5
 
@@ -126,18 +145,21 @@ def ridge_min(X, y, lam):
     w_init = np.zeros((d+1, 1))
 
     def J(Xj, yj, th):
-        return float(ridge_obj(Xj[:-1,:], yj, th[:-1,:], th[-1:,:], lam))
+        return float(logistic_obj(Xj[:-1,:], yj, th[:-1,:], th[-1:,:], lam))
 
     def dJ(Xj, yj, th):
-        return ridge_obj_grad(Xj[:-1,:], yj, th[:-1,:], th[-1:,:], lam)
+        return logistic_obj_grad(Xj[:-1,:], yj, th[:-1,:], th[-1:,:], lam)
     
     np.random.seed(0)
     w, fs, ws = sgd(X_extend, y, J, dJ, w_init, svm_min_step_size_fn, 1000)
     return w[:-1,:], w[-1:,:]
 
-def eval_predictor(X_train, Y_train, X_test, Y_test, lam):
-    th, th0 = ridge_min(X_train, Y_train, lam)
-    return np.sqrt(mean_square_loss(X_test, Y_test, th, th0))
+def eval_classifier(X_train, Y_train, X_test, Y_test, lam):
+    th, th0 = logistic_min(X_train, Y_train, lam)
+    predictions = logistic_predict(X_test, th, th0)
+    y_pred_binary = (predictions > 0.5).astype(int)
+    accuracy = np.mean(y_pred_binary == Y_test)
+    return 1 - accuracy
 
 def xval_learning_alg(X, y, lam, k):
     _, n = X.shape
@@ -155,5 +177,5 @@ def xval_learning_alg(X, y, lam, k):
         y_train = np.concatenate(split_y[:i] + split_y[i+1:], axis=1)
         X_test = np.array(split_X[i])
         y_test = np.array(split_y[i])
-        score_sum += eval_predictor(X_train, y_train, X_test, y_test, lam)
+        score_sum += eval_classifier(X_train, y_train, X_test, y_test, lam)
     return score_sum/k

@@ -2,7 +2,7 @@ from data_processing import *
 from sklearn.neighbors import KNeighborsClassifier #change based on what model you use
 from sklearn.metrics import accuracy_score
 
-path = 'LOL-Predictor/match_data_v5.csv'
+path = 'match_data_v5.csv'
 
 def init_data(path):
     print("League of Legends Win Prediction Model")
@@ -19,6 +19,11 @@ def init_data(path):
         'core_stats': [
             'blueTeamControlWardsPlaced', 'blueTeamWardsPlaced', 'blueTeamTotalKills', 'blueTeamDragonKills', 'blueTeamHeraldKills', 'blueTeamTowersDestroyed', 'blueTeamInhibitorsDestroyed', 'blueTeamTurretPlatesDestroyed', 'blueTeamFirstBlood', 'blueTeamTotalGold', 'blueTeamXp', 
             'redTeamControlWardsPlaced', 'redTeamWardsPlaced', 'redTeamTotalKills', 'redTeamDragonKills', 'redTeamHeraldKills', 'redTeamTowersDestroyed', 'redTeamInhibitorsDestroyed', 'redTeamTurretPlatesDestroyed', 'redTeamTotalGold', 'redTeamXp',
+            ],
+        'core_with_differences': [
+            'blueTeamControlWardsPlaced', 'blueTeamWardsPlaced', 'blueTeamTotalKills', 'blueTeamDragonKills', 'blueTeamHeraldKills', 'blueTeamTowersDestroyed', 'blueTeamInhibitorsDestroyed', 'blueTeamTurretPlatesDestroyed', 'blueTeamFirstBlood', 'blueTeamTotalGold', 'blueTeamXp', 
+            'redTeamControlWardsPlaced', 'redTeamWardsPlaced', 'redTeamTotalKills', 'redTeamDragonKills', 'redTeamHeraldKills', 'redTeamTowersDestroyed', 'redTeamInhibitorsDestroyed', 'redTeamTurretPlatesDestroyed', 'redTeamTotalGold', 'redTeamXp',
+            'goldDifference', 'killDifference', 'towerDifference', 'xpDifference', 'dragonDifference', 'wardDifference'
             ]
         }
 
@@ -67,7 +72,7 @@ def analyze_data(path):
                 best_rmse = rmse_scalar
                 best_lambda = lam
                 
-            print(f"    Lambda={lam:6.3f}: RMSE={rmse_scalar:.4f}")
+            print(f"    Lambda={lam:6.3f}: Error Rate={rmse_scalar:.4f}")
                 
         
         results[config] = {
@@ -77,9 +82,38 @@ def analyze_data(path):
             'num_features': X.shape[0]
         }
     
-        print(f"Best: Lambda={best_lambda}, RMSE={best_rmse:.3f}")
+        print(f"Best: Lambda={best_lambda}, Error Rate={best_rmse:.3f}")
     
     return results, feature_configs
+
+def confusion_matrix(y_true, y_pred):
+    y_true = y_true.flatten()
+    y_pred = y_pred.flatten()
+    
+    tp = np.sum((y_true == 1) & (y_pred == 1))
+    tn = np.sum((y_true == 0) & (y_pred == 0))
+    fp = np.sum((y_true == 0) & (y_pred == 1))
+    fn = np.sum((y_true == 1) & (y_pred == 0))
+    
+    return np.array([[tn, fp], [fn, tp]])
+
+def print_confusion_matrix(cm):
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    
+    print("\nConfusion Matrix:")
+    print(f"              Predicted")
+    print(f"              Red Win  Blue Win")
+    print(f"Actual Red Win   {tn:4d}     {fp:4d}")
+    print(f"       Blue Win  {fn:4d}     {tp:4d}")
+    
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    
+    print(f"\nMetrics:")
+    print(f"  Precision: {precision:.4f} (Blue wins predicted correctly)")
+    print(f"  Recall:    {recall:.4f} (Actual blue wins caught)")
+    print(f"  F1-Score:  {f1:.4f}")
 
 def analyze_lambda_sensitivity(path, config_name='core_stats'):
     print(f"Lambda Sensitivity Analysis: {config_name}")
@@ -100,7 +134,7 @@ def analyze_lambda_sensitivity(path, config_name='core_stats'):
             rmse = xval_learning_alg(X, lol_labels, lam, 10)
             rmse_scalar = float(rmse.flatten()[0]) if hasattr(rmse, 'flatten') else float(rmse)
             detailed_results.append((lam, rmse_scalar))
-            print(f"    Lambda={lam:7.3f}: RMSE={rmse_scalar:.6f}")
+            print(f"    Lambda={lam:7.3f}: Error Rate={rmse_scalar:.6f}")
             
         except Exception as e:
             print(f"    Lambda={lam:7.3f}: Error - {str(e)}")
@@ -108,7 +142,7 @@ def analyze_lambda_sensitivity(path, config_name='core_stats'):
     
     if detailed_results:
         best_lam, best_rmse = min(detailed_results, key=lambda x: x[1])
-        print(f"Optimal: Lambda={best_lam:.3f}, RMSE={best_rmse:.6f}")
+        print(f"Optimal: Lambda={best_lam:.3f}, Error Rate={best_rmse:.6f}")
         
         return detailed_results, best_lam, best_rmse
     
@@ -129,28 +163,34 @@ def evaluate_final_model(path, config_name, best_lambda, feature_configs):
     print(f"Test samples: {X_test.shape[1]}")
     print(f"Features: {X_train.shape[0]}")
 
-    th, th0 = ridge_min(X_train, y_train, best_lambda)
+    th, th0 = logistic_min(X_train, y_train, best_lambda)
 
-    train_rmse = float(np.sqrt(mean_square_loss(X_train, y_train, th, th0)).item())
-    test_rmse = float(np.sqrt(mean_square_loss(X_test, y_test, th, th0)).item())
+    train_loss = float(mean_logistic_loss(X_train, y_train, th, th0).item())
+    test_loss = float(mean_logistic_loss(X_test, y_test, th, th0).item())
 
-    print(f"Train RMSE: {train_rmse:.3f}")
-    print(f"Test RMSE:  {test_rmse:.3f}")
+    print(f"Train Loss: {train_loss:.3f}")
+    print(f"Test Loss:  {test_loss:.3f}")
 
-    y_train_pred = lin_reg(X_train, th, th0)
-    y_test_pred = lin_reg(X_test, th, th0)
+    train_predictions = logistic_predict(X_train, th, th0)
+    test_predictions = logistic_predict(X_test, th, th0)
 
-    train_accuracy = np.mean((y_train_pred > 0.5) == (y_train > 0.5))
-    test_accuracy = np.mean((y_test_pred > 0.5) == (y_test > 0.5))
+    train_pred_binary = (train_predictions > 0.5).astype(int)
+    test_pred_binary = (test_predictions > 0.5).astype(int)
+
+    train_accuracy = np.mean((train_predictions > 0.5) == (y_train > 0.5))
+    test_accuracy = np.mean((test_predictions > 0.5) == (y_test > 0.5))
 
     print(f"Train Accuracy: {train_accuracy:.4f}")
     print(f"Test Accuracy:  {test_accuracy:.4f}")
+
+    test_cm = confusion_matrix(y_test, test_pred_binary)
+    print_confusion_matrix(test_cm) 
     
     return {
         'theta': th, 'theta0': th0,
-        'train_rmse': train_rmse, 'test_rmse': test_rmse,
+        'train_rmse': train_loss, 'test_rmse': test_loss,
         'train_accuracy': train_accuracy, 'test_accuracy': test_accuracy,
-        'y_train_pred': y_train_pred, 'y_test_pred': y_test_pred,
+        'y_train_pred': train_predictions, 'y_test_pred': test_predictions,
         'y_train_true': y_train, 'y_test_true': y_test
     }
 
@@ -160,7 +200,7 @@ def print_summary(results):
     overall_best_rmse = float('inf')
     overall_best_config = None
     
-    print(f"{'Configuration':<20} {'Features':<10} {'Best Lambda':<12} {'Best RMSE':<12}")
+    print(f"{'Configuration':<20} {'Features':<10} {'Best Lambda':<12} {'Best Error Rate':<15}")
     
     for config_name, result in results.items():
         best_lambda = result['best_lambda']
@@ -179,9 +219,9 @@ def print_summary(results):
         print(f"    Configuration: {overall_best_config}")
         print(f"    Features: {best_result['num_features']}")
         print(f"    Best Lambda: {best_result['best_lambda']:.3f}")
-        print(f"    Best RMSE: {best_result['best_rmse']:.4f}")
+        print(f"    Best Error Rate: {best_result['best_rmse']:.4f}")
         
-        estimated_accuracy = max(0, 1 - (best_result['best_rmse']**2) / 2)
+        estimated_accuracy = 1 - best_result['best_rmse']
         print(f"    Estimated Accuracy: {estimated_accuracy:.4f}")
     
     return overall_best_config
@@ -198,4 +238,3 @@ if __name__ == "__main__":
         final_results = evaluate_final_model(path, best_config, optimal_lambda, feature_configs)
         
         print(f"Best configuration achieves {final_results['test_accuracy']:.1%} accuracy on test set")
-            
