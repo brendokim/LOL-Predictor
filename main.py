@@ -8,6 +8,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import joblib
 import json
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 csv_path   = "match_data_v5.csv"   
@@ -108,12 +110,24 @@ def train_and_eval(model, X_train, y_train, X_test, y_test):
     loss, acc = model.evaluate(X_test, y_test, verbose=0)
     print(f"\nTest Loss: {loss:.4f}  |  Test Acc: {acc:.4f}")
 
+    # Predictions
     y_prob = model.predict(X_test, verbose=0)
     y_pred = (y_prob > 0.5).astype(int)
 
+    # Reports
     print(classification_report(y_test, y_pred))
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
+    cm = confusion_matrix(y_test, y_pred)
+    print("Confusion Matrix:\n", cm)
+
+    # Plot confusion matrix heatmap
+    plt.figure(figsize=(5,4))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=True,
+                xticklabels=['Red Win', 'Blue Win'],
+                yticklabels=['Red Win', 'Blue Win'])
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Neural Network Confusion Matrix")
+    plt.show()
 
 
 def main():
@@ -130,7 +144,6 @@ def main():
     model = create_model(Xtr_s.shape[1])
     train_and_eval(model, Xtr_s, ytr.values, Xte_s, yte.values)
 
-    
     model.save("lol_win_model.keras")
     joblib.dump(scaler, "scaler.pkl")
     with open("features.json", "w") as f:
