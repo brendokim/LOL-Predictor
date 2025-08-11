@@ -1,6 +1,5 @@
 import numpy as np 
 import pandas as pd
-import itertools, functools, operator
 
 def load_data(path):
     df = pd.read_csv(path

@@ -1,6 +1,4 @@
 from data_processing import *
-from sklearn.neighbors import KNeighborsClassifier #change based on what model you use
-from sklearn.metrics import accuracy_score
 
 path = 'match_data_v5.csv'
 
