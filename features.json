@@ -1,0 +1,16 @@
+{
+  "features": [
+    "blueTeamTotalKills",
+    "blueTeamTotalGold",
+    "blueTeamTowersDestroyed",
+    "blueTeamDragonKills",
+    "blueTeamHeraldKills",
+    "blueTeamFirstBlood",
+    "redTeamTotalKills",
+    "redTeamTotalGold",
+    "redTeamTowersDestroyed",
+    "redTeamDragonKills",
+    "redTeamHeraldKills"
+  ],
+  "target": "blueWin"
+}
