@@ -25,7 +25,8 @@ TARGET_COL = 'blueWin'
 test_size = 0.2
 epochs    = 30
 batch_size= 64
-seed      = 42
+seed=42
+
 
 
 ALL_COLUMNS = [
@@ -49,7 +50,7 @@ def load_data(path, has_header=False):
     return df
 
 def clean_data(df):
-    print("Cleaning data...")
+    
     df = df.dropna()
     df = df.drop_duplicates()
     if TARGET_COL not in df.columns:
@@ -68,7 +69,7 @@ def select_features(df, selected):
     else:
         missing = [c for c in selected if c not in df.columns]
         if missing:
-            raise ValueError(f"Selected features not found in DataFrame: {missing}")
+            raise ValueError(f"Selected features not found in DataFrame")
         features = selected
 
     X = df[features].apply(pd.to_numeric, errors="coerce")
@@ -76,14 +77,11 @@ def select_features(df, selected):
 
     keep = ~X.isna().any(axis=1)
     if keep.sum() != len(X):
-        print(f"Dropping {len(X) - keep.sum()} rows due to non-numeric values.")
+   
         X = X.loc[keep]
         y = y.loc[keep]
 
-    print(f"Using {len(features)} features:")
-    for i, f in enumerate(features, 1):
-        print(f"{i:2d}. {f}")
-    print(f"X shape: {X.shape}, y shape: {y.shape}")
+
     return X, y, features
 
 
@@ -113,7 +111,6 @@ def train_and_eval(model, X_train, y_train, X_test, y_test):
     y_prob = model.predict(X_test, verbose=0)
     y_pred = (y_prob > 0.5).astype(int)
 
-    print("\nClassification Report:")
     print(classification_report(y_test, y_pred))
     print("Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
@@ -139,10 +136,7 @@ def main():
     with open("features.json", "w") as f:
         json.dump({"features": used_features, "target": TARGET_COL}, f, indent=2)
 
-    print("\nSaved:")
-    print(" - lol_win_model.keras")
-    print(" - scaler.pkl")
-    print(" - features.json (feature order for inference)")
+ 
 
 if __name__ == "__main__":
     main()

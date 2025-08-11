@@ -10,7 +10,7 @@ def load_metadata():
     return metadata["features"], metadata["target"]
 
 def get_user_input(features):
-    print("\nEnter match stats for the following features (e.g., values from first 15 minutes):")
+    print("\nEnter match stats for the following features for the first 15 minuites")
     values = {}
     for feature in features:
         while True:
@@ -29,9 +29,9 @@ def predict(df_input, model, scaler):
     return prob, pred
 
 def main():
-    print(" League of Legends Win Predictor (CLI)")
+    print(" League of Legends Win Predictor")
 
-    # Load model, scaler, and feature list
+
     model = load_model("lol_win_model.keras")
     scaler = joblib.load("scaler.pkl")
     features, target = load_metadata()
