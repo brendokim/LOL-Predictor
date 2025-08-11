@@ -4,15 +4,30 @@ import numpy as np
 import pandas as pd
 from tensorflow.keras.models import load_model
 
-def load_metadata():
-    with open("features.json", "r") as f:
-        metadata = json.load(f)
-    return metadata["features"], metadata["target"]
+SELECTED_FEATURES = [
+    'blueTeamTotalKills', 'blueTeamTotalGold', 'blueTeamTowersDestroyed',
+    'blueTeamDragonKills', 'blueTeamHeraldKills', 'blueTeamFirstBlood',
+    'redTeamTotalKills', 'redTeamTotalGold', 'redTeamTowersDestroyed',
+    'redTeamDragonKills', 'redTeamHeraldKills'
+]
 
-def get_user_input(features):
+def load_normalization_stats():
+    with open("normalization_stats.json", "r") as f:
+        stats = json.load(f)
+    return np.array(stats["mean"]), np.array(stats["std"])
+
+def get_user_input():
     print("\nEnter match stats for the following features for the first 15 minuites")
     values = {}
-    for feature in features:
+
+    base_features = [
+        'blueTeamTotalKills', 'blueTeamTotalGold', 'blueTeamTowersDestroyed',
+        'blueTeamDragonKills', 'blueTeamHeraldKills', 'blueTeamFirstBlood',
+        'redTeamTotalKills', 'redTeamTotalGold', 'redTeamTowersDestroyed',
+        'redTeamDragonKills', 'redTeamHeraldKills'
+    ]
+
+    for feature in base_features:
         while True:
             try:
                 val = float(input(f"{feature}: "))
@@ -22,25 +37,43 @@ def get_user_input(features):
                 print("Invalid input. Please enter a number.")
     return pd.DataFrame([values])
 
-def predict(df_input, model, scaler):
-    X_scaled = scaler.transform(df_input)
-    prob = model.predict(X_scaled)[0][0]
+def engineer_features(df):
+    df = df.copy()
+    
+    df['goldDifference'] = df['blueTeamTotalGold'] - df['redTeamTotalGold']
+    df['killDifference'] = df['blueTeamTotalKills'] - df['redTeamTotalKills']
+    df['towerDifference'] = df['blueTeamTowersDestroyed'] - df['redTeamTowersDestroyed']
+    df['dragonDifference'] = df['blueTeamDragonKills'] - df['redTeamDragonKills']
+    
+    all_features = SELECTED_FEATURES + [
+        'goldDifference', 'killDifference', 'towerDifference', 'dragonDifference'
+    ]
+    
+    return df[all_features]
+
+def standardize_features(X, mean, std):
+    X_array = X.values.astype(float)
+    return (X_array - mean) / std
+
+def predict(X_processed, model):
+    prob = model.predict(X_processed, verbose=0)[0][0]
     pred = int(prob > 0.5)
     return prob, pred
 
 def main():
     print(" League of Legends Win Predictor")
-
-
-    model = load_model("lol_win_model.keras")
-    scaler = joblib.load("scaler.pkl")
-    features, target = load_metadata()
+    
+    model = load_model("lol_win_model.keras") 
+    train_mean, train_std = load_normalization_stats()
 
     # Get user input
-    user_df = get_user_input(features)
+    user_df = get_user_input()
+
+    processed_df = engineer_features(user_df)
+    X_processed = standardize_features(processed_df, train_mean, train_std)
 
     # Predict
-    prob, pred = predict(user_df, model, scaler)
+    prob, pred = predict(X_processed, model)
 
     print(f"\n Probability Blue Wins: {prob:.2f}")
     print("🔵 Predicted Winner:" if pred else "🔴 Predicted Winner:", "Blue Team" if pred else "Red Team")

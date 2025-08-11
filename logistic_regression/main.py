@@ -1,4 +1,7 @@
 from data_processing import *
+from sklearn.metrics import confusion_matrix, classification_report
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 path = 'match_data_v5.csv'
 
@@ -84,35 +87,6 @@ def analyze_data(path):
     
     return results, feature_configs
 
-def confusion_matrix(y_true, y_pred):
-    y_true = y_true.flatten()
-    y_pred = y_pred.flatten()
-    
-    tp = np.sum((y_true == 1) & (y_pred == 1))
-    tn = np.sum((y_true == 0) & (y_pred == 0))
-    fp = np.sum((y_true == 0) & (y_pred == 1))
-    fn = np.sum((y_true == 1) & (y_pred == 0))
-    
-    return np.array([[tn, fp], [fn, tp]])
-
-def print_confusion_matrix(cm):
-    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
-    
-    print("\nConfusion Matrix:")
-    print(f"              Predicted")
-    print(f"              Red Win  Blue Win")
-    print(f"Actual Red Win   {tn:4d}     {fp:4d}")
-    print(f"       Blue Win  {fn:4d}     {tp:4d}")
-    
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    
-    print(f"\nMetrics:")
-    print(f"  Precision: {precision:.4f} (Blue wins predicted correctly)")
-    print(f"  Recall:    {recall:.4f} (Actual blue wins caught)")
-    print(f"  F1-Score:  {f1:.4f}")
-
 def analyze_lambda_sensitivity(path, config_name='core_stats'):
     print(f"Lambda Sensitivity Analysis: {config_name}")
 
@@ -172,8 +146,10 @@ def evaluate_final_model(path, config_name, best_lambda, feature_configs):
     train_predictions = logistic_predict(X_train, th, th0)
     test_predictions = logistic_predict(X_test, th, th0)
 
-    train_pred_binary = (train_predictions > 0.5).astype(int)
-    test_pred_binary = (test_predictions > 0.5).astype(int)
+    y_test_flat = np.array(y_test).flatten()
+    test_pred_flat = np.array(test_predictions).flatten()
+
+    test_pred_binary = (test_pred_flat > 0.5).astype(int)
 
     train_accuracy = np.mean((train_predictions > 0.5) == (y_train > 0.5))
     test_accuracy = np.mean((test_predictions > 0.5) == (y_test > 0.5))
@@ -181,17 +157,22 @@ def evaluate_final_model(path, config_name, best_lambda, feature_configs):
     print(f"Train Accuracy: {train_accuracy:.4f}")
     print(f"Test Accuracy:  {test_accuracy:.4f}")
 
-    test_cm = confusion_matrix(y_test, test_pred_binary)
-    print_confusion_matrix(test_cm) 
-    
-    return {
-        'theta': th, 'theta0': th0,
-        'train_rmse': train_loss, 'test_rmse': test_loss,
-        'train_accuracy': train_accuracy, 'test_accuracy': test_accuracy,
-        'y_train_pred': train_predictions, 'y_test_pred': test_predictions,
-        'y_train_true': y_train, 'y_test_true': y_test
-    }
+    print(classification_report(y_test_flat, test_pred_binary))
+    cm = confusion_matrix(y_test_flat, test_pred_binary)
+    print("Confusion Matrix:\n", cm)
 
+    print(f"Best configuration achieves {test_accuracy:.1%} accuracy on test set")
+
+    # Plot confusion matrix heatmap
+    plt.figure(figsize=(5,4))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=True,
+                xticklabels=['Red Win', 'Blue Win'],
+                yticklabels=['Red Win', 'Blue Win'])
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Logistic Regression Confusion Matrix")
+    plt.show()
+    
 def print_summary(results):
     print("Summary:")
 
@@ -232,7 +213,4 @@ if __name__ == "__main__":
         
     if best_config:
         detailed_results, optimal_lambda, optimal_rmse = analyze_lambda_sensitivity(path, best_config)
-
         final_results = evaluate_final_model(path, best_config, optimal_lambda, feature_configs)
-        
-        print(f"Best configuration achieves {final_results['test_accuracy']:.1%} accuracy on test set")
